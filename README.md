@@ -1,13 +1,17 @@
 # Azure Linux VM Administration and Troubleshooting with Azure CLI
 
 > **Project 03 in a cloud engineering learning portfolio**  
-> Status: Planned  
+> Status: Completed  
 > Platform: Microsoft Azure  
 > Region: `centralus`
 
 This hands-on lab builds on an existing Ubuntu Server 24.04 virtual machine and its network from Projects 01 and 02. It practices day-to-day VM operations through Azure CLI, including health checks, remote command execution, boot diagnostics, network inspection, and cost-aware lifecycle management.
 
 The lab reuses the existing VM. It does not create a second VM.
+
+## Outcome
+
+Completed the lab without issues. The work covered VM inspection, Azure Run Command, a reusable Linux health check, boot diagnostics, disk and NSG inspection, resource tagging, and VM deallocation and restart.
 
 ## Learning objectives
 
