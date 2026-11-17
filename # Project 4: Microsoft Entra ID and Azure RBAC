@@ -1,0 +1,116 @@
+# Project 4: Microsoft Entra ID and Azure RBAC
+
+For this project, I used Azure CLI to create a Microsoft Entra security group, add my user to it, and give the group read access to a dedicated Azure resource group.
+
+I wanted to understand how Entra ID and Azure RBAC work together. Entra ID holds users and groups. Azure RBAC controls what those identities can do with Azure resources.
+
+## What I set up
+
+- A temporary resource group named `rg-rbac-lab-<timestamp>` in `centralus`
+- An Entra security group named `grp-azure-rbac-readers-<timestamp>`
+- My signed-in user as a member of that group
+- The built-in `Reader` role assigned to the group at the lab resource-group scope
+
+I used a separate, empty resource group for the exercise, so I didn’t need to deploy a VM or other compute resources.
+
+## How I did it
+
+First, I checked the active Azure subscription and retrieved my Entra user object ID:
+
+```bash
+az account show --output table
+export SUBSCRIPTION_ID="$(az account show --query id --output tsv)"
+export USER_ID="$(az ad signed-in-user show --query id --output tsv)"
+```
+
+Then I created the lab resource group and set its RBAC scope:
+
+```bash
+export LAB_SUFFIX="$(date +%Y%m%d%H%M%S)"
+export RG="rg-rbac-lab-${LAB_SUFFIX}"
+
+az group create \
+  --name "$RG" \
+  --location centralus \
+  --tags Project=AzureRBACLab Environment=Training
+
+export SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}"
+```
+
+I created the security group and saved its object ID:
+
+```bash
+export GROUP_NAME="grp-azure-rbac-readers-${LAB_SUFFIX}"
+export MAIL_NICKNAME="azrbareaders${LAB_SUFFIX}"
+
+export GROUP_ID="$(az ad group create \
+  --display-name "$GROUP_NAME" \
+  --mail-nickname "$MAIL_NICKNAME" \
+  --description "Temporary security group for Azure RBAC training" \
+  --query id \
+  --output tsv)"
+```
+
+Next, I added my user and assigned the group the `Reader` role at the resource group scope:
+
+```bash
+az ad group member add \
+  --group "$GROUP_ID" \
+  --member-id "$USER_ID"
+
+az role assignment create \
+  --assignee-object-id "$GROUP_ID" \
+  --assignee-principal-type Group \
+  --role Reader \
+  --scope "$SCOPE"
+```
+
+I verified membership and the role assignment with `az ad group member check`, `az ad group member list`, and `az role assignment list`. I also checked the group and assignment in the Azure portal under **Microsoft Entra ID → Groups** and **Resource group → Access control (IAM)**.
+
+## What I took away
+
+The role assignment has three parts: **who** gets access (the group), **what** they can do (`Reader`), and **where** it applies (the resource group). Scoping it to the lab resource group kept the exercise separate from the rest of the subscription.
+
+A `Reader` assignment doesn’t take away access granted somewhere else. If a user already has `Contributor` or `Owner` through another assignment, those permissions still apply. To test a true read-only boundary, I’d need a separate user without other direct or inherited roles.
+
+I also reviewed the difference between `Reader`, `Contributor`, and `Owner`. Contributor can manage resources but cannot assign Azure roles; Owner can do both. For VM-specific management, a narrower role such as `Virtual Machine Contributor` may be a better fit than general Contributor.
+
+## Cleanup
+
+I removed the role assignment, deleted the Entra group, and deleted the empty resource group:
+
+```bash
+az role assignment delete \
+  --assignee "$GROUP_ID" \
+  --role Reader \
+  --scope "$SCOPE"
+
+az ad group delete --group "$GROUP_ID"
+az group delete --name "$RG" --yes
+
+az group exists --name "$RG"
+```
+
+The last command should return `false` after the resource group deletion finishes.
+
+## Permissions I needed
+
+The Azure subscription permissions and Entra directory permissions are separate. Creating the resource group and role assignment requires Azure permissions at the relevant scope. Creating a group and managing its members requires suitable Entra directory permissions. Being an Azure subscription Owner doesn’t automatically grant permission to create Entra groups.
+
+## Project notes
+
+- **Tools:** Azure CLI, Microsoft Entra ID, Azure RBAC, Azure portal
+- **Region:** `centralus`
+- **Compute deployed:** None
+
+Before sharing screenshots, remove subscription IDs and personal account details.
+
+## References
+
+- [Azure role assignments](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments)
+- [Azure RBAC scope](https://learn.microsoft.com/en-us/azure/role-based-access-control/scope-overview)
+- [Azure built-in roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles)
+- [Azure roles and Microsoft Entra roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/rbac-and-directory-admin-roles)
+- [Azure CLI: Entra groups](https://learn.microsoft.com/en-us/cli/azure/ad/group)
+- [Azure CLI: group members](https://learn.microsoft.com/en-us/cli/azure/ad/group/member)
+- [Azure CLI: role assignments](https://learn.microsoft.com/en-us/cli/azure/role/assignment)
